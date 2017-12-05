@@ -32,39 +32,47 @@ func Listen() {
 }
 
 func hello(lconn net.Conn) {
-	b := make([]byte, 4096)
-	_, err := lconn.Read(b)
-	if err != nil {
-		log.Println(err.Error())
-		return
-	}
-	if b[0] == 0xDD {
-		if b[1] != 0x00 {
-			log.Println("ack 0x00 error")
+	{
+		b := make([]byte, 1024)
+		_, err := lconn.Read(b)
+		if err != nil {
+			log.Println(err.Error())
 			return
 		}
-		switch b[2] {
-		case 0x01:
-			log.Println("write response")
-			lconn.Write([]byte{0xDD, 0x00, 0x01})
-
-		}
-	} else {
-		log.Println("error")
-	}
-
-	n, err := lconn.Read(b)
-
-	if b[0] == 0xDD {
-		if b[1] == 0x01 {
-			host := string(b[2 : n-2])
-			port := strconv.Itoa(int(b[n-2])<<8 | int(b[n-1]))
-			///todo bug
-			log.Println(host, ":", port, "==================")
-			tcpProxy(lconn, host, port)
+		if b[0] == 0xDD {
+			if b[1] != 0x00 {
+				log.Println("ack 0x00 error")
+				return
+			}
+			switch b[2] {
+			case 0x01:
+				lconn.Write([]byte{0xDD, 0x00, 0x01})
+			}
 		} else {
-			log.Println("ack 0x01 error")
+			log.Println("error")
+		}
+	}
+	{
+		b := make([]byte, 1024)
+		_, err := lconn.Read(b)
+		if err!=nil{
+			log.Println("read byte error")
 			return
+		}
+		if b[0] == 0xDD {
+			if b[1] == 0x01 {
+			getByteLen:=func(i,j int)int{
+				return int(b[i])<<8 | int(b[j])
+			}
+				hostlen:=getByteLen(2,3)
+				host := string(b[4: 4+hostlen])
+				port := strconv.Itoa(getByteLen(4+hostlen,5+hostlen))
+				log.Println("=============",host, ":", port)
+				tcpProxy(lconn, host, port)
+			} else {
+				log.Println("ack 0x01 error")
+				return
+			}
 		}
 	}
 }
@@ -96,8 +104,8 @@ func tcpProxy(lconn net.Conn, host, port string) {
 		}
 	}
 
+	log.Println("====start copy====")
 	go copyReqRes(rconn, lconn)
 	copyReqRes(lconn, rconn)
-
-	log.Println("req && res copy over")
+	log.Println("====copy  over====")
 }

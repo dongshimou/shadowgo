@@ -236,7 +236,7 @@ func hello(lconn net.Conn, host, port string) {
 	//转发需要代理的host&&port
 	//转发数据
 
-	b := make([]byte, 4096)
+	b := make([]byte, 1024)
 
 	/* request
 	-------------------------------------
@@ -267,14 +267,15 @@ func hello(lconn net.Conn, host, port string) {
 		case 0x01: //成功
 			{
 				/* response
-				|	VER		STATUS		HOST	PORT
-				|	1byte	1byte		n byte	2byte
+				|	VER		STATUS	HLEN	HOST	PORT
+				|	1byte	1byte	2byte	n byte	2byte
 				*/
-				b[0] = 0xDD
-				b[1] = 0x01
+				buffer:=make([]byte,1024)
+				buffer[0] = 0xDD
+				buffer[1] = 0x01
 				hb := []byte(host)
 
-				pb := func(port string) []byte {
+				string2blen := func(port string) []byte {
 					p64, _ := strconv.ParseInt(port, 10, 32)
 					p := int(p64)
 					base := 1 << 8
@@ -282,14 +283,14 @@ func hello(lconn net.Conn, host, port string) {
 					res[0] = byte(p / base)
 					res[1] = byte(p % base)
 					return res
-				}(port)
-
-				b = append(b[:2], hb...)
-				log.Println(hb)
-				b = append(b, pb[0], pb[1])
-				//log.Println(b)
-				rconn.Write(b)
-
+				}
+				hostlen:=string2blen( strconv.Itoa(len(host)) )
+				buffer = append(buffer[:2],hostlen[0],hostlen[1])
+				buffer = append(buffer[:4], hb...)
+				portlen:=string2blen(port)
+				buffer = append(buffer, portlen[0], portlen[1],0x00)
+				log.Println("=============",host,port)
+				rconn.Write(buffer)
 				{
 					copyReqRes := func(des, src net.Conn) {
 						_, err := io.Copy(des, src)
@@ -297,12 +298,10 @@ func hello(lconn net.Conn, host, port string) {
 							log.Println("error : ", err.Error())
 						}
 					}
-
+					log.Println("====start copy====")
 					go copyReqRes(rconn, lconn)
 					copyReqRes(lconn, rconn)
-
-					log.Println("req && res copy over")
-
+					log.Println("====copy  over====")
 				}
 			}
 		case 0x02: //一般性失败
