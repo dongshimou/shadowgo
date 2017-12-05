@@ -1,4 +1,4 @@
-package test
+package proxy
 
 import (
 	"io"
@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func ClientListen() {
+func Listen() {
 	l, err := net.Listen("tcp", ":1080")
 	if err != nil {
 		log.Println(" listen error")
@@ -21,7 +21,6 @@ func ClientListen() {
 			log.Println("accept error")
 			return
 		}
-		defer lconn.Close()
 		go startProxy(lconn)
 	}
 }
@@ -39,7 +38,7 @@ func startProxy(lconn net.Conn) {
 
 	n, err := lconn.Read(b)
 	if err != nil {
-
+		return
 	}
 	logSocks := func(j int) {
 		for i := 0; i < j; i++ {
@@ -89,7 +88,7 @@ func startProxy(lconn net.Conn) {
 	*/
 
 	if b[0] == 0x05 {
-
+		//解析主机和端口
 		parseHostPort := func(b []byte, n int) (host, port string) {
 			switch b[3] {
 			case 0x01: //ipv4	4字节
@@ -115,6 +114,8 @@ func startProxy(lconn net.Conn) {
 		case 0x03: //0x03 udp associate
 			udpProxy(lconn, host, port)
 		}
+	} else {
+		return
 	}
 }
 func tcpProxy(lconn net.Conn, host, port string) {
