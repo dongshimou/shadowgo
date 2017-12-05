@@ -108,7 +108,51 @@ func startProxy(lconn net.Conn) {
 		host, port := parseHostPort(b, n)
 		switch b[1] {
 		case 0x01: //0x01 connect
-			tcpProxy(lconn, host, port)
+
+			/* response
+			-------------------------------------------------------------
+			|	VER		REP		RSV		ATYP	DST.ADDR	DST.PORT	|
+			|	1byte	1byte	1byte	1byte	n byte		2byte		|
+			-------------------------------------------------------------
+			*/
+
+			res := make([]byte, 10)
+
+			// 版本号
+			res[0] = 0x05
+			// 返回状态
+
+			//	0x00	成功
+			//	0x01	普通的失败
+			//	0x02	规则不允许的连接
+			//	0x03	网络不可达
+			//	0x04	主机不可达
+			//	0x05	连接被拒绝
+			//	0x06	TTL超时
+			//	0x07	不支持的命令
+			//	0x08	不支持的地址类型
+			//	0x09 ~ 0xFF		未定义
+			res[1] = 0x00
+
+			//	保留位
+			res[2] = 0x00
+
+			//	地址类型
+			//	0x01	IPV4
+			//	0x03	域名
+			//	0x04	IPV6
+			res[3] = 0x01
+
+			// IPV4为4字节 域名为字符串 IPV6为16字节
+			res[4], res[5], res[6], res[7] = 0x00, 0x00, 0x00, 0x00
+
+			//	端口为2字节
+			res[8], res[9] = 0x00, 0x00
+
+			lconn.Write(res)
+
+			//tcpProxy(lconn, host, port)
+			hello(lconn, host, port)
 		case 0x02: //0x02 bind
 			//尚不清楚，貌似是udp的特殊绑定
 		case 0x03: //0x03 udp associate
@@ -118,6 +162,8 @@ func startProxy(lconn net.Conn) {
 		return
 	}
 }
+
+//test function
 func tcpProxy(lconn net.Conn, host, port string) {
 	///todo
 	//目前是直接与host&port建立的tcp连接
@@ -127,48 +173,6 @@ func tcpProxy(lconn net.Conn, host, port string) {
 		return
 	}
 	defer rconn.Close()
-
-	/* response
-	-------------------------------------------------------------
-	|	VER		REP		RSV		ATYP	DST.ADDR	DST.PORT	|
-	|	1byte	1byte	1byte	1byte	n byte		2byte		|
-	-------------------------------------------------------------
-	*/
-
-	res := make([]byte, 10)
-
-	// 版本号
-	res[0] = 0x05
-	// 返回状态
-
-	//	0x00	成功
-	//	0x01	普通的失败
-	//	0x02	规则不允许的连接
-	//	0x03	网络不可达
-	//	0x04	主机不可达
-	//	0x05	连接被拒绝
-	//	0x06	TTL超时
-	//	0x07	不支持的命令
-	//	0x08	不支持的地址类型
-	//	0x09 ~ 0xFF		未定义
-	res[1] = 0x00
-
-	//	保留位
-	res[2] = 0x00
-
-	//	地址类型
-	//	0x01	IPV4
-	//	0x03	域名
-	//	0x04	IPV6
-	res[3] = 0x01
-
-	// IPV4为4字节 域名为字符串 IPV6为16字节
-	res[4], res[5], res[6], res[7] = 0x00, 0x00, 0x00, 0x00
-
-	//	端口为2字节
-	res[8], res[9] = 0x00, 0x00
-
-	lconn.Write(res)
 
 	///todo
 	//转发
@@ -209,4 +213,105 @@ func udpProxy(lconn net.Conn, host, port string) {
 	*/
 
 	///todo
+	//udp 转发
+}
+
+func hello(lconn net.Conn, host, port string) {
+
+	//与远端sg服务器建立链接
+
+	log.Println("start connet remote server !")
+	serhost, serport := "127.0.0.1", "23333"
+
+	rconn, err := net.Dial("tcp", net.JoinHostPort(serhost, serport))
+
+	if err != nil {
+		log.Println("connect server error !")
+		return
+	}
+	defer rconn.Close()
+
+	//本地与远端 shadowgo的握手包
+	//todo 加密解密数据
+	//转发需要代理的host&&port
+	//转发数据
+
+	b := make([]byte, 4096)
+
+	/* request
+	-------------------------------------
+	|	VER		NULL		METHODS		|
+	|	1byte	1byte		1byte		|
+	-------------------------------------
+	*/
+
+	b[0], b[1], b[2] = 0xDD, 0x00, 0x01
+
+	rconn.Write(b)
+
+	/* request
+	-------------------------------------
+	|	VER		STATUS		METHODS		|
+	|	1byte	1byte		1byte		|
+	-------------------------------------
+	*/
+
+	_, err = rconn.Read(b)
+
+	if b[0] == 0xDD {
+		if b[1] != 0x00 {
+			log.Println("ack 0x00 error")
+			return
+		}
+		switch b[2] {
+		case 0x01: //成功
+			{
+				/* response
+				|	VER		STATUS		HOST	PORT
+				|	1byte	1byte		n byte	2byte
+				*/
+				b[0] = 0xDD
+				b[1] = 0x01
+				hb := []byte(host)
+
+				pb := func(port string) []byte {
+					p64, _ := strconv.ParseInt(port, 10, 32)
+					p := int(p64)
+					base := 1 << 8
+					res := make([]byte, 2)
+					res[0] = byte(p / base)
+					res[1] = byte(p % base)
+					return res
+				}(port)
+
+				b = append(b[:2], hb...)
+				log.Println(hb)
+				b = append(b, pb[0], pb[1])
+				//log.Println(b)
+				rconn.Write(b)
+
+				{
+					copyReqRes := func(des, src net.Conn) {
+						_, err := io.Copy(des, src)
+						if err != nil {
+							log.Println("error : ", err.Error())
+						}
+					}
+
+					go copyReqRes(rconn, lconn)
+					copyReqRes(lconn, rconn)
+
+					log.Println("req && res copy over")
+
+				}
+			}
+		case 0x02: //一般性失败
+
+		case 0x03: //不支持的加密
+		//b[2]为服务端的加密方式
+		case 0x04: //账号密码错误
+
+		case 0x05: //超时
+		}
+	}
 }
