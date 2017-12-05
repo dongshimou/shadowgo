@@ -55,24 +55,27 @@ func hello(lconn net.Conn) {
 	{
 		b := make([]byte, 1024)
 		_, err := lconn.Read(b)
-		if err!=nil{
+		if err != nil {
 			log.Println("read byte error")
 			return
 		}
 		if b[0] == 0xDD {
 			if b[1] == 0x01 {
-			getByteLen:=func(i,j int)int{
-				return int(b[i])<<8 | int(b[j])
-			}
-				hostlen:=getByteLen(2,3)
-				host := string(b[4: 4+hostlen])
-				port := strconv.Itoa(getByteLen(4+hostlen,5+hostlen))
-				log.Println("=============",host, ":", port)
+				getByteLen := func(i, j int) int {
+					return int(b[i])<<8 | int(b[j])
+				}
+				hostlen := getByteLen(2, 3)
+				host := string(b[4 : 4+hostlen])
+				port := strconv.Itoa(getByteLen(4+hostlen, 5+hostlen))
+				log.Println("=============", host, ":", port)
 				tcpProxy(lconn, host, port)
 			} else {
 				log.Println("ack 0x01 error")
 				return
 			}
+		} else {
+			log.Println("0xdd error")
+			return
 		}
 	}
 }
@@ -102,6 +105,7 @@ func tcpProxy(lconn net.Conn, host, port string) {
 		if err != nil {
 			log.Println("error : ", err.Error())
 		}
+		log.Println("go copy over!!!!!!")
 	}
 
 	log.Println("====start copy====")

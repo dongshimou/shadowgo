@@ -188,10 +188,10 @@ func tcpProxy(lconn net.Conn, host, port string) {
 		if err != nil {
 			log.Println("error : ", err.Error())
 		}
+		log.Println("go copy over!!!!!!")
 	}
-
-	go copyReqRes(rconn, lconn)
-	copyReqRes(lconn, rconn)
+	go copyReqRes(lconn, rconn)
+	copyReqRes(rconn, lconn)
 
 	log.Println("req && res copy over")
 }
@@ -270,7 +270,7 @@ func hello(lconn net.Conn, host, port string) {
 				|	VER		STATUS	HLEN	HOST	PORT
 				|	1byte	1byte	2byte	n byte	2byte
 				*/
-				buffer:=make([]byte,1024)
+				buffer := make([]byte, 1024)
 				buffer[0] = 0xDD
 				buffer[1] = 0x01
 				hb := []byte(host)
@@ -284,12 +284,12 @@ func hello(lconn net.Conn, host, port string) {
 					res[1] = byte(p % base)
 					return res
 				}
-				hostlen:=string2blen( strconv.Itoa(len(host)) )
-				buffer = append(buffer[:2],hostlen[0],hostlen[1])
+				hostlen := string2blen(strconv.Itoa(len(host)))
+				buffer = append(buffer[:2], hostlen[0], hostlen[1])
 				buffer = append(buffer[:4], hb...)
-				portlen:=string2blen(port)
-				buffer = append(buffer, portlen[0], portlen[1],0x00)
-				log.Println("=============",host,port)
+				portlen := string2blen(port)
+				buffer = append(buffer, portlen[0], portlen[1], 0x00)
+				log.Println("=============", host, port)
 				rconn.Write(buffer)
 				{
 					copyReqRes := func(des, src net.Conn) {
@@ -312,5 +312,8 @@ func hello(lconn net.Conn, host, port string) {
 
 		case 0x05: //超时
 		}
+	} else {
+		log.Println("0xdd error")
+		return
 	}
 }
