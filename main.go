@@ -6,10 +6,10 @@ import (
 )
 
 func main() {
-	go test.SocksProxy()
-	go test.ProxyServerTest()
+	go test.ClientListen()
+	go test.ServerListen()
 
 	for {
-		time.Sleep(time.Second)
+		time.Sleep(time.Second * 10)
 	}
 }

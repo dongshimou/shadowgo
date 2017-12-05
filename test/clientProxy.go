@@ -7,7 +7,7 @@ import (
 	"strconv"
 )
 
-func SocksProxy() {
+func ClientListen() {
 	l, err := net.Listen("tcp", ":1080")
 	if err != nil {
 		log.Println(" listen error")
@@ -57,7 +57,6 @@ func startProxy(lconn net.Conn) {
 
 	logSocks(0)
 	//logSocks(n)
-	//println(string(b))
 
 	if b[0] == 0x05 {
 		switch b[2] {
@@ -112,7 +111,7 @@ func startProxy(lconn net.Conn) {
 		case 0x01: //0x01 connect
 			tcpProxy(lconn, host, port)
 		case 0x02: //0x02 bind
-
+			//尚不清楚，貌似是udp的特殊绑定
 		case 0x03: //0x03 udp associate
 			udpProxy(lconn, host, port)
 		}
@@ -178,9 +177,16 @@ func tcpProxy(lconn net.Conn, host, port string) {
 	//println(string(b))
 	//rconn.Write(b)
 
-	go io.Copy(rconn, lconn)
+	//复制left请求到right
+	copyReqRes := func(des, src net.Conn) {
+		_, err := io.Copy(des, src)
+		if err != nil {
+			log.Println("error : ", err.Error())
+		}
+	}
 
-	io.Copy(lconn, rconn)
+	go copyReqRes(rconn, lconn)
+	copyReqRes(lconn, rconn)
 
 	log.Println("req && res copy over")
 }
