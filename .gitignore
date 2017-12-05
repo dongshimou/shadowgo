@@ -1,7 +1,5 @@
-<<<<<<< HEAD
 
 .idea/
-=======
 # Binaries for programs and plugins
 *.exe
 *.dll
@@ -16,4 +14,3 @@
 
 # Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
 .glide/
->>>>>>> 4ed2af01bc1c65c2b198ff878cbe1604825da98f
