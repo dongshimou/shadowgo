@@ -4,11 +4,12 @@ import (
 	"./test"
 	"time"
 )
-func main(){
-	go test.TcpProxy()
+
+func main() {
+	go test.SocksProxy()
 	go test.ProxyServerTest()
 
-	for{
-		time.Sleep(time.Second*10);
+	for {
+		time.Sleep(time.Second)
 	}
-	}
+}

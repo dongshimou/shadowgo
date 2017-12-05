@@ -1,6 +1,4 @@
 package test
 
-
-func ProxyServerTest(){
-	
+func ProxyServerTest() {
 }
