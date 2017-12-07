@@ -32,6 +32,7 @@ func Listen() {
 }
 
 func hello(lconn net.Conn) {
+	defer lconn.Close()
 	{
 		b := make([]byte, 1024)
 		_, err := lconn.Read(b)
@@ -81,13 +82,13 @@ func hello(lconn net.Conn) {
 func tcpProxy(lconn net.Conn, host, port string) {
 	///todo 加密解密数据
 	//目前是直接与host&port建立的tcp连接
+	log.Println("================start tcp proxy")
 	rconn, err := net.Dial("tcp", net.JoinHostPort(host, port))
 	if err != nil {
 		log.Println("join error")
 		return
 	}
 	defer rconn.Close()
-
 	///todo
 	//转发
 
@@ -97,15 +98,37 @@ func tcpProxy(lconn net.Conn, host, port string) {
 	//rconn.Write(b)
 
 	//复制left请求到right
-	copyReqRes := func(des, src net.Conn) {
+	copyReqRes := func(des, src net.Conn,is bool) {
 		_, err := io.Copy(des, src)
 		if err != nil {
-			log.Println("error : ", err.Error())
+			log.Println("copy error : ", err.Error())
+			return
 		}
+		if is {
+			log.Println(" src = l")
+		}else{
+		log.Println(" src = r")
+
+		}
+
+
 	}
 
 	log.Println("====start copy====")
-	go copyReqRes(rconn, lconn)
-	copyReqRes(lconn, rconn)
+	go copyReqRes(rconn, lconn,true)
+	copyReqRes(lconn, rconn,false)
+
 	log.Println("====copy  over====")
+
+	b:=[]byte{0xDD,0x02,0xDD}
+
+	log.Println("write start")
+	_,err=lconn.Write(b)
+	log.Println("write over close rconn && lconn")
+
+	if err!=nil{
+		log.Println("cann't over")
+		log.Println(err.Error())
+		return
+	}
 }

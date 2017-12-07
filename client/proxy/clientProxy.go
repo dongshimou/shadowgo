@@ -27,6 +27,7 @@ func Listen() {
 
 func startProxy(lconn net.Conn) {
 
+	defer lconn.Close()
 	b := make([]byte, 2048)
 
 	/* request
@@ -302,6 +303,25 @@ func hello(lconn net.Conn, host, port string) {
 					go copyReqRes(rconn, lconn)
 					copyReqRes(lconn, rconn)
 					log.Println("====copy  over====")
+
+					b:=make([]byte,1024)
+					n,err:=rconn.Read(b)
+					log.Println("finish len = ",n)
+					if err!=nil{
+						log.Println("remote close error!")
+						log.Println(err.Error())
+						return
+					}
+					if b[0]==0xdd{
+						if b[1]==0x02{
+							if b[2]==0xdd{
+							log.Println("remote close ! =======")
+							return
+							}
+						}
+					}
+					log.Println("remote")
+					return
 				}
 			}
 		case 0x02: //一般性失败
