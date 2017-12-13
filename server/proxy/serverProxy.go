@@ -113,12 +113,7 @@ func tcpProxy(lconn net.Conn, host, port string) {
 		log.Println(" src = r")
 
 		}
-<<<<<<< HEAD
-
-
-=======
 		log.Println("go copy over!!!!!!")
->>>>>>> 370ad641d11d843213948d54282f13f30bc8d328
 	}
 
 	log.Println("====start copy====")

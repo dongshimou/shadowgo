@@ -5,14 +5,28 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"encoding/binary"
 )
 
+type tcpMsg struct {
+	id uint64
+	buf []byte
+}
+var cpool = make(map[uint64]tcpMsg)
+var uid uint64 = 0
+var sendqueue chan tcpMsg
+var recvqueue chan tcpMsg
 func Listen() {
+
 	l, err := net.Listen("tcp", ":1080")
 	if err != nil {
 		log.Println(" listen error")
 		return
 	}
+
+	sendqueue=make(chan tcpMsg,4096)
+	recvqueue=make(chan tcpMsg,4096)
+
 	log.Println("start listen")
 	for {
 		lconn, err := l.Accept()
@@ -24,6 +38,34 @@ func Listen() {
 		go startProxy(lconn)
 	}
 }
+
+func send(c chan tcpMsg,rconn net.Conn) {
+	for {
+		res := <-c
+		bef:=make([]byte,16)
+		binary.BigEndian.PutUint64(bef,res.id)
+		bef=append(bef[:16],res.buf...)
+		rconn.Write(bef)
+	}
+}
+
+func recv(c chan tcpMsg,rconn net.Conn){
+	for{
+		buf:=make([]byte,32*1024)
+		for{
+		_,err:=rconn.Read(buf)
+		if err!=nil{
+
+		}
+		msg:=tcpMsg{
+		id:binary.BigEndian.Uint64(buf[:16]),
+		buf:buf[16:],
+		}
+		c <-msg
+		}
+	}
+}
+
 
 func startProxy(lconn net.Conn) {
 
