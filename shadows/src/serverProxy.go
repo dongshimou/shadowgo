@@ -1,10 +1,10 @@
-package proxy
+package src
 
 import (
+	"../../common"
 	"log"
 	"net"
 	"strconv"
-	"io"
 )
 
 func Listen() {
@@ -100,24 +100,15 @@ func tcpProxy(lconn net.Conn, host, port string) {
 	//println(string(b))
 	//rconn.Write(b)
 
-	//复制left请求到right
-	copyReqRes := func(des, src net.Conn) {
-		_, err := io.Copy(des, src)
-			if err != nil {
-				log.Println("error : ", err.Error())
-				return
-			}
-	}
 	log.Println("====start copy====")
-	go copyReqRes(rconn, lconn)
-	copyReqRes(lconn, rconn)
+	go common.CopyData(rconn, lconn)
+	common.CopyData(lconn, rconn)
 
-	//log.Println("write start")
-	b:=[]byte{0xDD,0x02,0xDD}
-	_,err=lconn.Write(b)
-	log.Println("write over close rconn && lconn")
+	//b := []byte{0xDD, 0x02, 0xDD}
+	//_, err = lconn.Write(b)
+	log.Println("====finish====")
 
-	if err!=nil{
+	if err != nil {
 		log.Println(err)
 		return
 	}

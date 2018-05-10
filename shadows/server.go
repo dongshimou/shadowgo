@@ -1,9 +1,9 @@
 package main
 
 import (
-	"./proxy"
+	"./src"
 )
 
 func main() {
-	proxy.Listen()
+	src.Listen()
 }

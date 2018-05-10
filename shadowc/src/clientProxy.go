@@ -1,21 +1,23 @@
-package proxy
+package src
 
 import (
+	"../../common"
+	"encoding/binary"
 	"log"
 	"net"
 	"strconv"
-	"encoding/binary"
-	"io"
 )
 
 type tcpMsg struct {
-	id uint64
+	id  uint64
 	buf []byte
 }
+
 var cpool = make(map[uint64]tcpMsg)
 var uid uint64 = 0
 var sendqueue chan tcpMsg
 var recvqueue chan tcpMsg
+
 func Listen() {
 
 	l, err := net.Listen("tcp", ":12344")
@@ -24,8 +26,8 @@ func Listen() {
 		return
 	}
 
-	sendqueue=make(chan tcpMsg,4096)
-	recvqueue=make(chan tcpMsg,4096)
+	sendqueue = make(chan tcpMsg, 4096)
+	recvqueue = make(chan tcpMsg, 4096)
 
 	log.Println("start listen")
 	for {
@@ -39,33 +41,32 @@ func Listen() {
 	}
 }
 
-func send(c chan tcpMsg,rconn net.Conn) {
+func send(c chan tcpMsg, rconn net.Conn) {
 	for {
 		res := <-c
-		bef:=make([]byte,16)
-		binary.BigEndian.PutUint64(bef,res.id)
-		bef=append(bef[:16],res.buf...)
+		bef := make([]byte, 16)
+		binary.BigEndian.PutUint64(bef, res.id)
+		bef = append(bef[:16], res.buf...)
 		rconn.Write(bef)
 	}
 }
 
-func recv(c chan tcpMsg,rconn net.Conn){
-	for{
-		buf:=make([]byte,32*1024)
-		for{
-		_,err:=rconn.Read(buf)
-		if err!=nil{
+func recv(c chan tcpMsg, rconn net.Conn) {
+	for {
+		buf := make([]byte, 32*1024)
+		for {
+			_, err := rconn.Read(buf)
+			if err != nil {
 
-		}
-		msg:=tcpMsg{
-		id:binary.BigEndian.Uint64(buf[:16]),
-		buf:buf[16:],
-		}
-		c <-msg
+			}
+			msg := tcpMsg{
+				id:  binary.BigEndian.Uint64(buf[:16]),
+				buf: buf[16:],
+			}
+			c <- msg
 		}
 	}
 }
-
 
 func sockv5(lconn net.Conn) {
 
@@ -79,136 +80,135 @@ func sockv5(lconn net.Conn) {
 	-------------------------------------
 	*/
 
-
-		n, err := lconn.Read(b)
-		if err != nil {
+	n, err := lconn.Read(b)
+	if err != nil {
+		return
+	}
+	DEBUG := false
+	logSocks := func(j int) {
+		if !DEBUG {
 			return
 		}
-		DEBUG:=false
-		logSocks := func(j int) {
-			if !DEBUG{
-			return
-			}
-			for i := 0; i < j; i++ {
-				print(b[i], " ")
-			}
-			print("\n")
+		for i := 0; i < j; i++ {
+			print(b[i], " ")
 		}
+		print("\n")
+	}
 
-		/* response
+	/* response
 	-------------------------
 	|	VER		METHOD		|
 	|	1byte	1byte		|
 	-------------------------
 	*/
 
-		//logSocks(0)
-		logSocks(n)
+	//logSocks(0)
+	logSocks(n)
 
-		if b[0] == 0x05 {
-			switch b[2] {
-			case 0x00: //无密码
-				lconn.Write([]byte{0x05, 0x00})
-			case 0x01: //通用安全接口
-				lconn.Write([]byte{0x05, 0x01})
-			case 0x02: //用户名+密码
-				lconn.Write([]byte{0x05, 0x02})
-				// 0x03 ~ 0x7F IANA分配
-				// 0x80 ~ 0xFE 私人方法
-			case 0xFF: //无方法
-				log.Println("no method")
-				return
-			}
-		} else {
-			log.Println("it is not socksV5 ")
+	if b[0] == 0x05 {
+		switch b[2] {
+		case 0x00: //无密码
+			lconn.Write([]byte{0x05, 0x00})
+		case 0x01: //通用安全接口
+			lconn.Write([]byte{0x05, 0x01})
+		case 0x02: //用户名+密码
+			lconn.Write([]byte{0x05, 0x02})
+			// 0x03 ~ 0x7F IANA分配
+			// 0x80 ~ 0xFE 私人方法
+		case 0xFF: //无方法
+			log.Println("no method")
 			return
 		}
-		n, err = lconn.Read(b)
+	} else {
+		log.Println("it is not socksV5 ")
+		return
+	}
+	n, err = lconn.Read(b)
 
-		logSocks(n)
+	logSocks(n)
 
-		/* request
+	/* request
 	-------------------------------------------------------------
 	|	VER		CMD		RSV		ATYP	DST.ADDR	DST.PORT	|
 	|	1byte	1byte	1byte	1byte	n byte		2byte		|
 	-------------------------------------------------------------
 	*/
 
-		if b[0] == 0x05 {
-			//解析主机和端口
-			parseHostPort := func(b []byte, n int) (host, port string) {
-				switch b[3] {
-				case 0x01: //ipv4	4字节
-					host = net.IP{b[4], b[5], b[6], b[7]}.String()
-				case 0x03: //host	字符串
-					host = string(b[5 : n-2])
-				case 0x04: //ipv6	16字节
-					addr := b[4:20]
-					host = net.IP(addr).String()
-				}
-				//端口	2字节
-				port = strconv.Itoa(int(b[n-2])<<8 | int(b[n-1]))
-				println(host, port)
-				return host, port
+	if b[0] == 0x05 {
+		//解析主机和端口
+		parseHostPort := func(b []byte, n int) (host, port string) {
+			switch b[3] {
+			case 0x01: //ipv4	4字节
+				host = net.IP{b[4], b[5], b[6], b[7]}.String()
+			case 0x03: //host	字符串
+				host = string(b[5 : n-2])
+			case 0x04: //ipv6	16字节
+				addr := b[4:20]
+				host = net.IP(addr).String()
 			}
+			//端口	2字节
+			port = strconv.Itoa(int(b[n-2])<<8 | int(b[n-1]))
+			println(host, port)
+			return host, port
+		}
 
-			host, port := parseHostPort(b, n)
-			switch b[1] {
-			case 0x01: //0x01 connect
+		host, port := parseHostPort(b, n)
+		switch b[1] {
+		case 0x01: //0x01 connect
 
-				/* response
+			/* response
 			-------------------------------------------------------------
 			|	VER		REP		RSV		ATYP	DST.ADDR	DST.PORT	|
 			|	1byte	1byte	1byte	1byte	n byte		2byte		|
 			-------------------------------------------------------------
 			*/
 
-				res := make([]byte, 10)
+			res := make([]byte, 10)
 
-				// 版本号
-				res[0] = 0x05
-				// 返回状态
+			// 版本号
+			res[0] = 0x05
+			// 返回状态
 
-				//	0x00	成功
-				//	0x01	普通的失败
-				//	0x02	规则不允许的连接
-				//	0x03	网络不可达
-				//	0x04	主机不可达
-				//	0x05	连接被拒绝
-				//	0x06	TTL超时
-				//	0x07	不支持的命令
-				//	0x08	不支持的地址类型
-				//	0x09 ~ 0xFF		未定义
-				res[1] = 0x00
+			//	0x00	成功
+			//	0x01	普通的失败
+			//	0x02	规则不允许的连接
+			//	0x03	网络不可达
+			//	0x04	主机不可达
+			//	0x05	连接被拒绝
+			//	0x06	TTL超时
+			//	0x07	不支持的命令
+			//	0x08	不支持的地址类型
+			//	0x09 ~ 0xFF		未定义
+			res[1] = 0x00
 
-				//	保留位
-				res[2] = 0x00
+			//	保留位
+			res[2] = 0x00
 
-				//	地址类型
-				//	0x01	IPV4
-				//	0x03	域名
-				//	0x04	IPV6
-				res[3] = 0x01
+			//	地址类型
+			//	0x01	IPV4
+			//	0x03	域名
+			//	0x04	IPV6
+			res[3] = 0x01
 
-				// IPV4为4字节 域名为字符串 IPV6为16字节
-				res[4], res[5], res[6], res[7] = 0x00, 0x00, 0x00, 0x00
+			// IPV4为4字节 域名为字符串 IPV6为16字节
+			res[4], res[5], res[6], res[7] = 0x00, 0x00, 0x00, 0x00
 
-				//	端口为2字节
-				res[8], res[9] = 0x00, 0x00
+			//	端口为2字节
+			res[8], res[9] = 0x00, 0x00
 
-				lconn.Write(res)
-				tcpProxy(lconn, host, port)
-				//hello(lconn, host, port)
-			case 0x02: //0x02 bind
-				//尚不清楚，貌似是udp的特殊绑定
-			case 0x03: //0x03 udp associate
-				udpProxy(lconn, host, port)
-			}
+			lconn.Write(res)
+			//hello(lconn, host, port)
+			tcpProxy(lconn, host, port)
+		case 0x02: //0x02 bind
+			//尚不清楚，貌似是udp的特殊绑定
+		case 0x03: //0x03 udp associate
+			udpProxy(lconn, host, port)
 		}
+	}
 }
 
 //test function
-func tcpProxy(lconn net.Conn, host, port string) {
+func hello(lconn net.Conn, host, port string) {
 	///todo
 	//目前是直接与host&port建立的tcp连接
 	rconn, err := net.Dial("tcp", net.JoinHostPort(host, port))
@@ -227,23 +227,9 @@ func tcpProxy(lconn net.Conn, host, port string) {
 	//println(string(b))
 	//rconn.Write(b)
 
-	//复制left请求到right
-	copyReqRes := func(des, src net.Conn) {
-		//bbb:=make([]byte,4096)
-		//n,err:=src.Read(bbb)
-			_, err := io.Copy(des, src)
-			//log.Println(string(bbb))
-			if err != nil {
-				log.Println("error : ", err.Error())
-			}
-			log.Println("go copy over!!!!!!")
-			//if n>0{
-			//	des.Write(bbb)
-			//}
-	}
-	go copyReqRes(rconn, lconn)
+	go common.CopyData(rconn, lconn)
 	log.Println("client -> server")
-	copyReqRes(lconn, rconn)
+	common.CopyData(lconn, rconn)
 	log.Println("server -> client")
 
 	//time.Sleep(time.Second*60)
@@ -269,11 +255,41 @@ func udpProxy(lconn net.Conn, host, port string) {
 	///todo
 	//udp 转发
 }
+var SQUEUE = make(chan []byte, 512)
+var RQUEUE = make(chan []byte,512)
 
-func hello(lconn net.Conn, host, port string) {
+func initProxy(host,port string){
+	channal, err := net.Dial("tcp", net.JoinHostPort(host, port))
+	if err!=nil{
+		log.Println(err)
+		panic(err)
+	}
+	SQUEUE<-[]byte("2333")
+
+
+	send:= func() {
+		for {
+			data := <-SQUEUE
+			channal.Write(data)
+		}
+	}
+	recv:= func() {
+		for {
+			msg := make([]byte, 4096)
+				_, err := channal.Read(msg)
+				if err!=nil{
+					log.Println(err)
+					break
+				}
+			}
+		}
+	go send()
+	go recv()
+}
+
+func tcpProxy(lconn net.Conn, host, port string) {
 
 	//与远端sg服务器建立链接
-
 	log.Println("start connet remote server !")
 	serhost, serport := "127.0.0.1", "23333"
 
@@ -346,29 +362,16 @@ func hello(lconn net.Conn, host, port string) {
 				log.Println("=============", host, port)
 				rconn.Write(buffer)
 				{
-					copyReqRes := func(des, src net.Conn) {
-							msg:=make([]byte,4096)
-							msgLen,err:=src.Read(msg)
-							if err != nil {
-								log.Println("error : ", err.Error())
-								return
-							}
-							if msgLen<=0 {
-							//log.Print("msg empty")
-							}
-							log.Println(string(msg))
-							src.Write(msg)
-					}
-					log.Println("====start copy====")
-					copyReqRes(rconn,lconn)
-					go copyReqRes(rconn, lconn)
-					copyReqRes(lconn, rconn)
 
-					rconn.Read(b)
-					if b[0]==0xdd{
-						if b[1]==0x02{
-							if b[2]==0xdd{
-							return
+					log.Println("====start copy====")
+					go common.CopyData(rconn, lconn)
+					common.CopyData(lconn, rconn)
+
+					log.Println("====finish====")
+					if b[0] == 0xdd {
+						if b[1] == 0x02 {
+							if b[2] == 0xdd {
+								return
 							}
 						}
 					}
